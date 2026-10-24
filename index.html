@@ -580,6 +580,7 @@ function initRealMap(){
   const src = document.createElement("button"); src.className = "mapsrc"; src.innerHTML = `מפה: <b id="mapSrc">${key ? "טוען Google…" : "OpenStreetMap"}</b>`; src.onclick = openMapSettings; $(".mapwrap").appendChild(src);
   if (key){
     window.__gmReady = () => {
+      if (RM.kind === "osm" || RM.kind === "fail") return;
       RM.kind = "google";
       const map = RM.map = new google.maps.Map(host, { center:{ lat:32.078, lng:34.787 }, zoom:13, disableDefaultUI:true, gestureHandling:"greedy", clickableIcons:false });
       class Ov extends google.maps.OverlayView {
@@ -593,21 +594,40 @@ function initRealMap(){
       map.addListener("zoom_changed", () => setTimeout(drawMarkers, 60));
       $("#mapSrc").textContent = "Google Maps";
     };
-    window.gm_authFailure = () => { toast("מפתח Google Maps לא תקין. בדוק אותו בהגדרות."); };
-    const s = document.createElement("script"); s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__gmReady&language=he&region=IL&loading=async`; s.async = true; s.onerror = () => fallbackSchematic("לא הצלחתי לטעון את Google Maps. עברתי למפה הסכמטית."); document.head.appendChild(s);
-  } else if (window.L){
-    RM.kind = "osm";
-    const map = RM.map = L.map(host, { zoomControl:false, attributionControl:true }).setView([32.078, 34.787], 13);
-    const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { subdomains:"abcd", maxZoom:20, attribution:"© OpenStreetMap contributors © CARTO" }).addTo(map);
-    let ok = 0, bad = 0;
-    tiles.on("tileload", () => ok++);
-    tiles.on("tileerror", () => { bad++; if (bad >= 6 && !ok) fallbackSchematic("המפה האמיתית לא נטענה. עברתי למפה הסכמטית."); });
-    setTimeout(() => { if (!ok && RM.on && RM.kind === "osm") fallbackSchematic("המפה האמיתית לא נטענה. עברתי למפה הסכמטית."); }, 9000);
-    L.svgOverlay(RM.el, [[BBOX.s, BBOX.w], [BBOX.n, BBOX.e]], { interactive:false }).addTo(map);
-    map.on("click", e => rmPick(e.latlng.lat, e.latlng.lng));
-    map.on("zoomend", drawMarkers);
-    $("#mapSrc").textContent = "OpenStreetMap";
-  }
+    const toOSM = msg => { if (RM.kind === "osm") return; store.set("gmkey", ""); RM.kind = "fail"; toast(msg); startOSM(); };
+    window.gm_authFailure = () => toOSM("Google Maps דורש מפתח עם חיוב פעיל. עברתי למפה החינמית.");
+    const s = document.createElement("script"); s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=__gmReady&language=he&region=IL&loading=async`; s.async = true; s.onerror = () => toOSM("Google Maps לא נטען. עברתי למפה החינמית."); document.head.appendChild(s);
+    setTimeout(() => { if (RM.kind !== "google") toOSM("Google Maps לא נטען. עברתי למפה החינמית."); }, 8000);
+  } else startOSM();
+}
+function startOSM(){
+  if (!window.L){ fallbackSchematic(); return; }
+  document.getElementById("rmap")?.remove();
+  const host = document.createElement("div"); host.id = "rmap"; $(".mapwrap").prepend(host);
+  RM.kind = "osm";
+  const map = RM.map = L.map(host, { zoomControl:false, attributionControl:true }).setView([32.078, 34.787], 13);
+  // Keyless providers. OSM's own server needs a Referer, so a file opened from disk starts on Esri.
+  const PROVIDERS = [
+    { name:"OpenStreetMap", url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png", opt:{ maxZoom:19, attribution:"© OpenStreetMap contributors" } },
+    { name:"Esri", url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", opt:{ maxZoom:19, attribution:"Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors" } },
+  ];
+  if (location.protocol === "file:") PROVIDERS.reverse();
+  let idx = 0, layer = null;
+  const useProvider = i => {
+    if (i >= PROVIDERS.length){ fallbackSchematic("המפה האמיתית לא נטענה. עברתי למפה הסכמטית."); return; }
+    idx = i; if (layer) map.removeLayer(layer);
+    const pr = PROVIDERS[i]; let ok = 0, bad = 0;
+    layer = L.tileLayer(pr.url, pr.opt).addTo(map);
+    layer.on("tileload", () => ok++);
+    layer.on("tileerror", () => { bad++; if (bad >= 6 && !ok && idx === i) useProvider(i + 1); });
+    setTimeout(() => { if (!ok && idx === i && RM.kind === "osm") useProvider(i + 1); }, 7000);
+    const ms = $("#mapSrc"); if (ms) ms.textContent = pr.name;
+  };
+  useProvider(0);
+  L.svgOverlay(RM.el, [[BBOX.s, BBOX.w], [BBOX.n, BBOX.e]], { interactive:false }).addTo(map);
+  map.on("click", e => rmPick(e.latlng.lat, e.latlng.lng));
+  map.on("zoomend", drawMarkers);
+  setTimeout(drawMarkers, 50);
 }
 function fallbackSchematic(msg){
   if (!RM.on) return;
@@ -1447,7 +1467,7 @@ function bootDemo(){
 /* splash */
 (() => { const sp = $("#splash"); if (!sp) return; $("#spCat").innerHTML = catAvatar({ id:"TLV-0001", name:"סלפי", hex:"#d9822b", color:"ג׳ינג׳י", pattern:"טאבי", marks:"פס לבן על החזה", neutered:true });
   const done = () => sp.remove(); sp.onclick = done; setTimeout(done, reduceMotion ? 1200 : 3100); })();
-if (window.REAL_MAP && (gmKey() || window.L)) initRealMap(); else drawBase();
+if (window.REAL_MAP && window.L) initRealMap(); else drawBase();
 renderLayers(); renderLegend(); fitVB(); updatePickHint();
 bootDemo();
 initInstall();
