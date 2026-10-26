@@ -295,7 +295,7 @@ th{font-size:12px;color:var(--mute);font-weight:700;background:var(--land)}
         <svg id="map" role="img" aria-label="מפת תל אביב-יפו עם חתולים, דיווחים ופינות האכלה"></svg>
         <div class="layers" id="layers"></div>
         <div class="pickhint" id="pickHint" hidden></div>
-        <div class="zoom"><button id="zin" aria-label="הגדל">+</button><button id="zout" aria-label="הקטן">−</button></div>
+        <div class="zoom"><button id="zin" aria-label="הגדל">+</button><button id="zout" aria-label="הקטן">−</button><button id="locate" aria-label="המיקום שלי" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button></div>
         <div class="fab">
           <div class="legend" id="legend"></div>
           <button class="btn alert" id="openReport">דיווח</button>
@@ -735,6 +735,7 @@ function drawMarkers(){
       g += `<g data-rep="${esc(r.id)}" data-dog="${esc(r.id)}" style="cursor:pointer"><circle class="pulse" cx="0" cy="0" r="6" fill="#b8793a"/><circle cx="0" cy="0" r="${9*s}" fill="#b8793a" stroke="var(--card)" stroke-width="${2*s}"/><g transform="translate(${-7*s},${-7*s}) scale(${.14*s})">${dogSvg().replace(/<\/?svg[^>]*>/g, "")}</g></g>`;
     }
   }
+  if (S.myLoc){ const [x, y] = px(S.myLoc.lat, S.myLoc.lng); g += `<g pointer-events="none"><circle class="pulse" cx="${x}" cy="${y}" r="6" fill="#2f7cf6" style="transform-origin:${x}px ${y}px;transform:scale(${s})"/><circle cx="${x}" cy="${y}" r="${7*s}" fill="#2f7cf6" stroke="#fff" stroke-width="${2.5*s}"/></g>`; }
   if (S.pick){ const [x, y] = px(S.pick.lat, S.pick.lng); g += `<g pointer-events="none"><path d="M${x} ${y}c-${8*s}-${10*s}-${10*s}-${14*s}-${10*s}-${18*s}a${10*s} ${10*s} 0 0 1 ${20*s} 0c0 ${4*s}-${2*s} ${8*s}-${10*s} ${18*s}z" fill="var(--ink)"/><circle cx="${x}" cy="${y-18*s}" r="${4*s}" fill="var(--paper)"/></g>`; }
   mk.innerHTML = g;
   dogAnims = S.layers.dogs ? S.reports.filter(r => r.type === "dog" && open(r) && r.trail && r.trail.length) : [];
@@ -789,6 +790,8 @@ svg.addEventListener("pointerup", e => {
 svg.addEventListener("pointercancel", e => { pointers.delete(e.pointerId); drag = null; });
 svg.addEventListener("wheel", e => { e.preventDefault(); zoomTo(vb.w * (e.deltaY > 0 ? 1.15 : 0.87)); }, { passive:false });
 function zoomTo(w){ w = Math.max(120, Math.min(900, w)); const cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2, ratio = vb.h / vb.w; vb.w = w; vb.h = w * ratio; vb.x = cx - w / 2; vb.y = cy - vb.h / 2; applyVB(); }
+if (window.REAL_MAP && navigator.geolocation){ $("#locate").hidden = false; }
+$("#locate").onclick = () => locate(true);
 $("#zin").onclick = () => RM.on ? (RM.kind === "google" ? RM.map.setZoom(RM.map.getZoom() + 1) : RM.map.zoomIn()) : zoomTo(vb.w * .75);
 $("#zout").onclick = () => RM.on ? (RM.kind === "google" ? RM.map.setZoom(RM.map.getZoom() - 1) : RM.map.zoomOut()) : zoomTo(vb.w * 1.33);
 function centerOn(lat, lng, w){
@@ -930,6 +933,7 @@ function openDogCard(r){
 /* ---------- REPORT FLOWS ---------- */
 $("#openReport").onclick = () => openReportMenu();
 function openReportMenu(){
+  if (GEO && !S.pick && !S.locAsked) locate(false);
   sheet(`<div class="stack"><h2>מה קרה?</h2>
     <div class="rep-grid">
       <button class="rep" id="r-distress"><span class="ic" style="background:var(--alert-soft);color:var(--alert)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/></svg></span><span><b>חתול במצוקה</b><span>פצוע, חולה, גורים בלי אמא, לכוד. מסמן אות עזרה במפה.</span></span></button>
@@ -941,8 +945,29 @@ function openReportMenu(){
     s.querySelector("#r-body").onclick = () => openBody();
   });
 }
-function locLine(){ return S.pick ? `<span class="chip sea">${esc(DIST[S.pick.district].name)}</span> <button class="btn ghost" style="padding:4px 10px" data-repick>שנה מיקום</button>` : `<button class="btn ghost" data-repick>סמן מיקום על המפה</button>`; }
-function bindRepick(s, reopen){ s.querySelectorAll("[data-repick]").forEach(b => b.onclick = () => { closeSheet(); go("map"); S.picking = reopen; updatePickHint(); }); }
+/* ---------- device location (site build; the claude.ai viewer refuses it) ---------- */
+const GEO = !!(window.REAL_MAP && navigator.geolocation);
+let geoWatch = null;
+function geoErr(e){ return e && e.code === 1 ? "הגישה למיקום חסומה. אפשר אותה בהגדרות הדפדפן לאתר הזה." : "לא הצלחתי לקבל מיקום. נסה שוב בשטח פתוח."; }
+function setMyLoc(p){ S.myLoc = { lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy }; drawMarkers(); }
+function locate(center, then){
+  if (!GEO){ toast("המיקום זמין באפליקציה המותקנת או באתר"); return; }
+  S.locAsked = true;
+  navigator.geolocation.getCurrentPosition(p => {
+    setMyLoc(p);
+    const d = districtAt(S.myLoc.lat, S.myLoc.lng);
+    if (d){ S.pick = { lat:S.myLoc.lat, lng:S.myLoc.lng, district:d }; updatePickHint(); drawMarkers(); }
+    else if (center) toast("נראה שאתה מחוץ לתל אביב-יפו. סמן מיקום על המפה.");
+    if (center && d) centerOn(S.myLoc.lat, S.myLoc.lng, 220);
+    if (geoWatch === null) geoWatch = navigator.geolocation.watchPosition(setMyLoc, () => {}, { enableHighAccuracy:true, maximumAge:15000 });
+    if (then) then(!!d);
+  }, e => { if (center || then) toast(geoErr(e)); if (then) then(false); }, { enableHighAccuracy:true, timeout:12000, maximumAge:30000 });
+}
+function locLine(){ return (S.pick ? `<span class="chip sea">${esc(DIST[S.pick.district].name)}</span> <button class="btn ghost" style="padding:4px 10px" data-repick>שנה מיקום</button>` : `<button class="btn ghost" data-repick>סמן מיקום על המפה</button>`) + (GEO ? ` <button class="btn ghost" style="padding:4px 10px" data-gps>המיקום שלי</button>` : ""); }
+function bindRepick(s, reopen){
+  s.querySelectorAll("[data-repick]").forEach(b => b.onclick = () => { closeSheet(); go("map"); S.picking = reopen; updatePickHint(); });
+  s.querySelectorAll("[data-gps]").forEach(b => b.onclick = () => { b.textContent = "מאתר…"; b.disabled = true; locate(false, ok => { if (ok) reopen(); else { b.textContent = "המיקום שלי"; b.disabled = false; } }); });
+}
 function photoField(id){ return `<label class="f">תמונה (לא חובה)<input type="file" id="${id}" accept="image/*" capture="environment"></label>`; }
 async function readThumb(file, size = 480){
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
@@ -1014,6 +1039,7 @@ function stopCam(){ if (camStream){ camStream.getTracks().forEach(t => t.stop())
 function scanLocText(){ return S.pick ? DIST[S.pick.district].name : "לא נבחר מיקום"; }
 function renderScanIdle(){
   stopCam();
+  if (GEO && !S.pick && !S.locAsked) locate(false, ok => { if (ok && S.view === "scan" && $("#camPick")) renderScanIdle(); });
   $("#scanPad").innerHTML = `
     <div><h2>סריקת חתול</h2><p class="muted small">כוון את המצלמה לחתול. המנוע מזהה אותו לבד, בלי ללחוץ על צילום: צבע, סימנים, מצב בריאות, ואם הוא כבר במאגר.</p></div>
     <div class="cam" id="cam"><div class="campick" id="camPick">
@@ -1021,10 +1047,11 @@ function renderScanIdle(){
       <button class="btn ginger" id="camStart">פתח מצלמה</button>
       <label class="small" style="color:#cfd8dd">או <u style="cursor:pointer">בחר תמונה מהגלריה</u><input type="file" id="camFile" accept="image/*" capture="environment" hidden></label>
     </div></div>
-    <div class="card row" style="justify-content:space-between"><span class="small">מיקום הסריקה: <b>${esc(scanLocText())}</b></span><button class="btn ghost" id="scanLoc" style="padding:6px 12px">${S.pick ? "שנה" : "סמן במפה"}</button></div>
+    <div class="card row" style="justify-content:space-between"><span class="small">מיקום הסריקה: <b>${esc(scanLocText())}</b></span><span class="row" style="gap:6px">${GEO ? `<button class="btn ghost" id="scanGps" style="padding:6px 12px">המיקום שלי</button>` : ""}<button class="btn ghost" id="scanLoc" style="padding:6px 12px">${S.pick ? "שנה" : "סמן במפה"}</button></span></div>
     <p class="small muted">${S.sample ? "הזיהוי מתבצע על ידי Claude, על חשבון הצפייה שלך. בפעם הראשונה תתבקש לאשר." : "הזיהוי כאן הוא הדגמה מקומית לפי צבע. מנוע הבינה המלאכותית זמין כשפותחים את האפליקציה ב-claude.ai."}</p>`;
   $("#camStart").onclick = startCam;
   $("#camFile").onchange = e => { const f = e.target.files[0]; if (f) analyzeFile(f); };
+  const sg = $("#scanGps"); if (sg) sg.onclick = () => { sg.textContent = "מאתר…"; locate(false, () => renderScanIdle()); };
   $("#scanLoc").onclick = () => { go("map"); S.picking = () => { go("scan"); renderScanIdle(); }; updatePickHint(); };
 }
 async function startCam(){
