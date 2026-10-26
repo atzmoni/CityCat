@@ -274,6 +274,14 @@ th{font-size:12px;color:var(--mute);font-weight:700;background:var(--land)}
 .installbar img{width:48px;height:48px;border-radius:12px;flex:none}
 .ib-text{display:grid;gap:2px;font-size:13.5px;min-width:0;flex:1}
 .ib-text b{font-size:15px}
+.auth{position:absolute;inset:0;z-index:1250;background:var(--paper);overflow:auto;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.auth-box{width:min(380px,100%);display:grid;gap:14px}
+.auth-head{display:grid;justify-items:center;gap:6px;text-align:center}
+.auth-head svg{width:72px;height:72px}
+.auth-head b{font-size:24px}
+.auth input[type=email],.auth input[type=password]{font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card);color:var(--ink);width:100%;direction:ltr;text-align:right}
+.auth-err{color:var(--alert);font-size:13.5px;min-height:1em}
+.linkbtn{border:0;background:none;color:var(--sea);font:inherit;font-size:13.5px;text-decoration:underline;padding:4px}
 .ib-x{border:0;background:var(--land-2);border-radius:50%;width:30px;height:30px;font-size:18px;flex:none}
 </style>
 
@@ -344,6 +352,7 @@ th{font-size:12px;color:var(--mute);font-weight:700;background:var(--land)}
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="config.js"></script>
 <script>window.REAL_MAP = true; window.PWA = true;</script>
 <script>
 document.documentElement.lang = "he";
@@ -473,12 +482,12 @@ async function del(col, id){
   renderAll();
 }
 function strip(o){ return JSON.parse(JSON.stringify(o)); }
-function writeErr(e){ return e && e.code === "permission_denied" ? "אין לך הרשאת כתיבה. בקש מבעל האפליקציה גישת משתתף." : e && e.code === "quota_exceeded" ? "המאגר מלא. מנהל האזור צריך לפנות רשומות ישנות." : "השמירה לא הצליחה. נסה שוב בעוד רגע."; }
+function writeErr(e){ return e && e.code === "permission_denied" ? (PROD ? "רק מנהל האפליקציה יכול לעשות את זה." : "אין לך הרשאת כתיבה. בקש מבעל האפליקציה גישת משתתף.") : e && e.code === "quota_exceeded" ? "המאגר מלא. מנהל האזור צריך לפנות רשומות ישנות." : "השמירה לא הצליחה. נסה שוב בעוד רגע."; }
 function saveLocal(){ store.set("demo", { cats:S.cats, reports:S.reports, stations:S.stations }); }
 async function addPoints(n, field){
   S.me.points += n; if (field) S.me[field] = (S.me[field] || 0) + 1;
   renderPts();
-  if (S.db && S.uid){ try { await S.db.collection("players").doc(S.uid).set({ ...S.me, uid:S.uid, updated:Date.now() }); } catch {} }
+  if (S.db && S.uid){ try { await S.db.collection("players").doc(S.uid).set({ ...S.me, uid:S.uid, ...(S.myName ? { name:S.myName } : {}), updated:Date.now() }); } catch {} }
   else store.set("me", S.me);
 }
 
@@ -1048,7 +1057,7 @@ function renderScanIdle(){
       <label class="small" style="color:#cfd8dd">או <u style="cursor:pointer">בחר תמונה מהגלריה</u><input type="file" id="camFile" accept="image/*" capture="environment" hidden></label>
     </div></div>
     <div class="card row" style="justify-content:space-between"><span class="small">מיקום הסריקה: <b>${esc(scanLocText())}</b></span><span class="row" style="gap:6px">${GEO ? `<button class="btn ghost" id="scanGps" style="padding:6px 12px">המיקום שלי</button>` : ""}<button class="btn ghost" id="scanLoc" style="padding:6px 12px">${S.pick ? "שנה" : "סמן במפה"}</button></span></div>
-    <p class="small muted">${S.sample ? "הזיהוי מתבצע על ידי Claude, על חשבון הצפייה שלך. בפעם הראשונה תתבקש לאשר." : "הזיהוי כאן הוא הדגמה מקומית לפי צבע. מנוע הבינה המלאכותית זמין כשפותחים את האפליקציה ב-claude.ai."}</p>`;
+    <p class="small muted">${PROD && !S.sample ? "הזיהוי מתבצע במכשיר שלך לפי הצבע והדפוס של הפרווה, ומשווה לחתולים שכבר במאגר." : S.sample ? "הזיהוי מתבצע על ידי Claude, על חשבון הצפייה שלך. בפעם הראשונה תתבקש לאשר." : "הזיהוי כאן הוא הדגמה מקומית לפי צבע. מנוע הבינה המלאכותית זמין כשפותחים את האפליקציה ב-claude.ai."}</p>`;
   $("#camStart").onclick = startCam;
   $("#camFile").onchange = e => { const f = e.target.files[0]; if (f) analyzeFile(f); };
   const sg = $("#scanGps"); if (sg) sg.onclick = () => { sg.textContent = "מאתר…"; locate(false, () => renderScanIdle()); };
@@ -1263,11 +1272,13 @@ function renderFeed(){
   $("#feedPad").querySelectorAll("[data-loc]").forEach(b => b.onclick = () => { const c = S.cats.find(x => x.id === b.dataset.loc); go("map"); centerOn(c.lat, c.lng, 220); });
 }
 async function sendPrivate(kind, doc){
+  if (S.sb){ const { error } = await S.sb.from("private_requests").insert({ id:doc.id, kind, doc }); if (error){ toast(writeErr(sbErr(error))); return false; } return true; }
   if (!S.uid){ toast("כדי לשלוח צריך להיות מחובר ל-claude.ai"); return false; }
   try { await S.db.collection("data/users/" + S.uid).doc(doc.id).set(doc); await S.db.collection("inbox").doc(doc.id).set({ id:doc.id, uid:S.uid, kind, created:doc.created }); return true; }
   catch (e){ toast(writeErr(e)); return false; }
 }
 async function loadPrivate(kind){
+  if (S.sb){ const { data, error } = await S.sb.from("private_requests").select("doc,created_by").eq("kind", kind); if (error) throw sbErr(error); return data.map(r => ({ ...r.doc, _uid:r.created_by })); }
   const q = await S.db.collection("inbox").where("kind", "==", kind).get();
   const out = [];
   for (const d of q.docs){ const m = d.data(); try { const x = await S.db.doc(`data/users/${m.uid}/${m.id}`).get(); if (x.exists) out.push({ ...x.data(), _uid:m.uid }); } catch {} }
@@ -1348,6 +1359,7 @@ function renderMe(){
   const badges = [["סריקה ראשונה", (S.me.scans || 0) >= 1],["גילית חתול חדש", (S.me.newCats || 0) >= 1],["מדווח/ת", (S.me.reports || 0) >= 1],["10 סריקות", (S.me.scans || 0) >= 10],["גיימר/ית", (S.me.games || 0) >= 1]];
   const board = Object.values(S.players).sort((a, b) => b.points - a.points).slice(0, 8);
   $("#mePad").innerHTML = `
+    ${S.sb ? `<div class="card row" style="justify-content:space-between"><div><b>${esc(S.myName)}</b><div class="small muted" style="direction:ltr;text-align:right">${esc(S.email)}</div></div><button class="btn ghost" id="signOut">התנתקות</button></div>` : ""}
     <div class="card stack">
       <div class="row" style="justify-content:space-between"><div><h2>${esc(lv[1])}</h2><p class="small muted">${next ? `עוד ${next[0] - p} נקודות ל"${next[1]}"` : "הגעת לדרגה העליונה"}</p></div><div class="pts" style="font-size:20px">${p}</div></div>
       <div class="bar" style="height:10px"><i style="width:${next ? Math.round((p - lv[0]) / (next[0] - lv[0]) * 100) : 100}%;background:var(--ginger)"></i></div>
@@ -1355,11 +1367,12 @@ function renderMe(){
       <p class="small muted">ניקוד: סריקת חתול קיים 10 · חתול חדש 25 · אות מצוקה 40 · כלב משוטט 30 · איסוף גופה 20 · משחק עד 15</p>
     </div>
     ${board.length ? `<div class="card"><h3>טבלת המובילים</h3><div class="lb">${board.map((b, i) => `<div><span>${i + 1}. ${esc(S.names[b.uid] || (b.uid === S.uid ? "אני" : "מתנדב/ת"))}</span><b>${b.points}</b></div>`).join("")}</div></div>` : ""}
-    <div class="card stack"><div class="row" style="justify-content:space-between"><h3>פאנל מנהל אזור</h3>${S.admin ? `<span class="chip leaf">יש לך גישה</span>` : `<span class="chip">למנהלי אזור בלבד</span>`}</div>
+    ${PROD && !S.admin ? "" : `<div class="card stack"><div class="row" style="justify-content:space-between"><h3>${PROD ? "פאנל ניהול" : "פאנל מנהל אזור"}</h3>${S.admin ? `<span class="chip leaf">יש לך גישה</span>` : `<span class="chip">למנהלי אזור בלבד</span>`}</div>
       ${S.admin ? adminHtml() : `<p class="small muted">מנהלי אזור רואים נתוני אמת לפי אזור, משנים רשומות ומטפלים בדיווחים. בעל האפליקציה נותן הרשאת עורך כדי לפתוח את הפאנל.</p>`}
-    </div>
+    </div>`}
     <div class="card stack small"><h3>על הנתונים</h3><p>בתל אביב-יפו חיים לפי הערכה כ-40,000 חתולי רחוב, וכ-5,000 תושבים מאכילים אותם. כדי לעצור את גידול האוכלוסייה צריך לעקר לפחות 75% מכל מושבה. האפליקציה מודדת בדיוק את זה, אזור אחרי אזור.</p><p class="muted">המפה כאן סכמטית. גרסת הפקה תשתמש במפות Google עם מפתח API.</p></div>`;
   if (S.admin) bindAdmin();
+  const so = $("#signOut"); if (so) so.onclick = async () => { so.disabled = true; await S.sb.auth.signOut().catch(() => {}); location.reload(); };
 }
 function adminHtml(){
   const st = distStats();
@@ -1421,7 +1434,8 @@ async function loadAdopt(){
   el.innerHTML = list.length ? list.sort((a, b) => b.created - a.created).map(a => `<div class="qitem" style="color:var(--ink)"><div class="row" style="justify-content:space-between"><b>${esc(a.name)} · ${esc(a.catName || "כל חתול")}</b><span class="chip ${a.route === "עמותה" ? "leaf" : "sea"}">${esc(a.route)}</span></div><p class="small">${esc(a.contact)} · ${esc(a.home)}${a.note ? " · " + esc(a.note) : ""}</p><div class="row"><select data-adst="${esc(a.id)}" aria-label="סטטוס" style="width:auto">${["חדשה","בשיחה","ביקור בית","אומץ","לא מתאים"].map(o => `<option ${o === a.status ? "selected" : ""}>${o}</option>`).join("")}</select><span class="small muted">${fmtAgo(a.created)}</span></div></div>`).join("") : "עוד אין בקשות אימוץ.";
   el.querySelectorAll("[data-adst]").forEach(sel => sel.onchange = async () => {
     const a = list.find(x => x.id === sel.dataset.adst); a.status = sel.value;
-    if (S.db){ try { const { _uid, ...body } = a; await S.db.doc(`data/users/${_uid}/${a.id}`).set(body); } catch (e){ toast(writeErr(e)); } } else store.set("adopt", list);
+    if (S.sb){ const { _uid, ...body } = a; const { error } = await S.sb.from("private_requests").update({ doc:body }).eq("id", a.id); if (error) toast(writeErr(sbErr(error))); }
+    else if (S.db){ try { const { _uid, ...body } = a; await S.db.doc(`data/users/${_uid}/${a.id}`).set(body); } catch (e){ toast(writeErr(e)); } } else store.set("adopt", list);
     if (sel.value === "אומץ" && a.catId){ const c = S.cats.find(x => x.id === a.catId); if (c) put("cats", { ...c, adoptable:false, notes:"אומץ/ה " + fmtDate(Date.now()) }); }
     toast("הסטטוס עודכן");
   });
@@ -1481,6 +1495,140 @@ function initInstall(){
   addEventListener("appinstalled", () => { const b = document.getElementById("installBar"); if (b) b.remove(); });
 }
 
+/* ---------- production backend: Supabase (site build with config.js filled in) ---------- */
+const CFG = window.CITYCAT_CONFIG || {};
+const PROD = !!(CFG.supabaseUrl && CFG.supabaseKey);
+const SB_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+function sbErr(e){ return { code: e && (e.code === "42501" || /row-level security|permission/i.test(e.message || "")) ? "permission_denied" : "error", message: e && e.message }; }
+// Same calls the rest of the app makes on the claude.ai store, backed by Supabase tables.
+function sbStore(sb){
+  const all = async col => {
+    const rows = [];
+    for (let from = 0; ; from += 1000){
+      const { data, error } = await sb.from(col).select("id,doc").range(from, from + 999);
+      if (error) throw sbErr(error);
+      rows.push(...data); if (data.length < 1000) return rows;
+    }
+  };
+  return { collection: col => ({
+    doc: id => ({
+      async set(doc){ const { error } = await sb.from(col).upsert({ id, doc }); if (error) throw sbErr(error); },
+      async delete(){ const { data, error } = await sb.from(col).delete().eq("id", id).select("id"); if (error) throw sbErr(error); if (!data.length) throw { code:"permission_denied" }; },
+    }),
+    onSnapshot(cb, onErr){
+      let t;
+      const load = () => all(col).then(rows => cb({ docs: rows.map(r => ({ id:r.id, data:() => r.doc })) }), e => onErr && onErr(e));
+      load();
+      sb.channel("live-" + col).on("postgres_changes", { event:"*", schema:"public", table:col }, () => { clearTimeout(t); t = setTimeout(load, 500); }).subscribe();
+    },
+  }) };
+}
+function listen(db, names){
+  const sub = col => db.collection(col).onSnapshot(q => { S[col] = q.docs.map(d => d.data()); renderAll(); }, () => {});
+  sub("cats"); sub("reports"); sub("stations");
+  db.collection("players").onSnapshot(async q => {
+    S.players = {}; q.docs.forEach(d => { const v = d.data(); S.players[v.uid || d.id] = v; });
+    const mine = S.players[S.uid]; if (mine) S.me = { ...S.me, ...mine };
+    if (names) await names(); else for (const id in S.players) S.names[id] = S.players[id].name || "";
+    renderAll();
+  }, () => {});
+}
+const LOGO_SVG = `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="22" r="15" fill="var(--ginger)"/><path d="M7 14 9 3l9 7M33 14 31 3l-9 7" fill="var(--ginger)"/><circle cx="14.5" cy="21" r="2.4" fill="var(--card)"/><circle cx="25.5" cy="21" r="2.4" fill="var(--card)"/><path d="M18 27h4l-2 2z" fill="var(--card)"/></svg>`;
+function authMsg(e){
+  const m = (e && e.message || "").toLowerCase();
+  if (m.includes("invalid login")) return "האימייל או הסיסמה לא נכונים.";
+  if (m.includes("already registered") || m.includes("already been registered")) return "האימייל הזה כבר רשום. נסה להתחבר.";
+  if (m.includes("password should be") || m.includes("at least")) return "הסיסמה צריכה להיות לפחות 6 תווים.";
+  if (m.includes("email not confirmed")) return "צריך לאשר את האימייל דרך הקישור שנשלח אליך.";
+  if (m.includes("rate limit") || m.includes("too many")) return "יותר מדי ניסיונות. נסה שוב בעוד כמה דקות.";
+  if (m.includes("invalid") && m.includes("email")) return "כתובת האימייל לא תקינה.";
+  if (m.includes("fetch") || m.includes("network")) return "אין חיבור לשרת. בדוק את האינטרנט ונסה שוב.";
+  return "משהו השתבש. נסה שוב.";
+}
+function showAuth(mode = "in", note = ""){
+  let el = $("#auth");
+  if (!el){ el = document.createElement("div"); el.id = "auth"; el.className = "auth"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "התחברות"); $("#app").appendChild(el); }
+  const up = mode === "up", reset = mode === "reset";
+  el.innerHTML = `<form class="auth-box card" novalidate>
+    <div class="auth-head">${LOGO_SVG}<b>חתולי ת״א</b><span class="small muted">ממפים, מצילים, מאמצים. ${reset ? "איפוס סיסמה" : up ? "יצירת חשבון חדש" : "התחברות לחשבון"}</span></div>
+    ${up ? `<label class="f">שם שיוצג באפליקציה<input type="text" id="auName" maxlength="30" autocomplete="nickname" required></label>` : ""}
+    <label class="f">אימייל<input type="email" id="auEmail" autocomplete="email" inputmode="email" required></label>
+    ${reset ? "" : `<label class="f">סיסמה<input type="password" id="auPass" minlength="6" autocomplete="${up ? "new-password" : "current-password"}" required></label>`}
+    <div class="auth-err" id="auErr" role="alert">${esc(note)}</div>
+    <button class="btn ginger block" id="auGo">${reset ? "שלחו לי קישור לאיפוס" : up ? "הרשמה" : "כניסה"}</button>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" class="linkbtn" data-mode="${up || reset ? "in" : "up"}">${up || reset ? "יש לי חשבון, להתחברות" : "אין לי חשבון, להרשמה"}</button>
+      ${up || reset ? "" : `<button type="button" class="linkbtn" data-mode="reset">שכחתי סיסמה</button>`}
+    </div>
+    <p class="small muted" style="text-align:center">כל משתמש רשום יכול לסרוק, לדווח ולצבור נקודות. פרטים אישיים ובקשות אימוץ נשמרים רק אצל מנהל האפליקציה.</p>
+  </form>`;
+  el.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => showAuth(b.dataset.mode));
+  const f = el.querySelector("form"), err = el.querySelector("#auErr"), go = el.querySelector("#auGo");
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const email = el.querySelector("#auEmail").value.trim(), pass = el.querySelector("#auPass")?.value || "", name = el.querySelector("#auName")?.value.trim() || "";
+    if (!/^\S+@\S+\.\S+$/.test(email)) return err.textContent = "כתובת האימייל לא תקינה.";
+    if (!reset && pass.length < 6) return err.textContent = "הסיסמה צריכה להיות לפחות 6 תווים.";
+    if (up && !name) return err.textContent = "איך לקרוא לך?";
+    go.disabled = true; err.textContent = "";
+    try {
+      if (reset){
+        const { error } = await S.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+        if (error) throw error;
+        showAuth("in", "אם האימייל רשום, נשלח אליו קישור לאיפוס הסיסמה.");
+      } else if (up){
+        const { data, error } = await S.sb.auth.signUp({ email, password:pass, options:{ data:{ name } } });
+        if (error) throw error;
+        if (data.session) enterApp(data.session); else showAuth("in", "נשלח אליך אימייל לאישור החשבון. אחרי האישור אפשר להתחבר.");
+      } else {
+        const { data, error } = await S.sb.auth.signInWithPassword({ email, password:pass });
+        if (error) throw error;
+        enterApp(data.session);
+      }
+    } catch (x){ err.textContent = authMsg(x); go.disabled = false; }
+  };
+}
+function openNewPassword(){
+  sheet(`<form class="stack" id="npForm"><h2>סיסמה חדשה</h2><label class="f">הסיסמה החדשה<input type="password" id="npPass" minlength="6" autocomplete="new-password" style="font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--paper);color:var(--ink)"></label><button class="btn ginger block">שמירה</button></form>`, s => {
+    s.querySelector("#npForm").onsubmit = async e => {
+      e.preventDefault();
+      const password = s.querySelector("#npPass").value;
+      if (password.length < 6) return toast("הסיסמה צריכה להיות לפחות 6 תווים.");
+      const { error } = await S.sb.auth.updateUser({ password });
+      if (error) return toast(authMsg(error));
+      closeSheet(); toast("הסיסמה עודכנה");
+    };
+  });
+}
+async function enterApp(session){
+  if (S.uid === session.user.id && S.db) return;
+  const a = $("#auth"); if (a) a.remove();
+  const u = session.user;
+  S.uid = u.id; S.email = u.email || ""; S.myName = (u.user_metadata && u.user_metadata.name) || S.email.split("@")[0];
+  S.db = sbStore(S.sb);
+  const [{ data:adm }, { data:me }] = await Promise.all([S.sb.rpc("is_admin"), S.sb.from("players").select("doc").eq("id", S.uid).maybeSingle()]);
+  S.admin = adm === true;
+  if (me) S.me = { ...S.me, ...me.doc }; else addPoints(0);
+  listen(S.db);
+  renderAll();
+}
+async function startProd(){
+  S.demo = false; S.uid = null; S.admin = false; $("#demoFlag").hidden = true;
+  renderAll();
+  showAuth();
+  const go = $("#auGo"); if (go) go.disabled = true;
+  try {
+    if (!window.supabase) await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = SB_JS; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); });
+  } catch { $("#auErr").textContent = "אין חיבור לשרת. בדוק את האינטרנט ונסה לרענן."; return; }
+  S.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
+  S.sb.auth.onAuthStateChange((ev, session) => {
+    if (ev === "PASSWORD_RECOVERY"){ if (session) enterApp(session); openNewPassword(); }
+    if (ev === "SIGNED_OUT" && S.db) location.reload();
+  });
+  const { data } = await S.sb.auth.getSession();
+  if (data.session) enterApp(data.session); else if (go) go.disabled = false;
+}
+
 /* ---------- boot ---------- */
 function bootDemo(){
   S.demo = true; $("#demoFlag").hidden = false;
@@ -1496,9 +1644,10 @@ function bootDemo(){
   const done = () => sp.remove(); sp.onclick = done; setTimeout(done, reduceMotion ? 1200 : 3100); })();
 if (window.REAL_MAP && window.L) initRealMap(); else drawBase();
 renderLayers(); renderLegend(); fitVB(); updatePickHint();
-bootDemo();
+if (PROD) startProd(); else bootDemo();
 initInstall();
 (async () => {
+  if (PROD) return;
   const [db, sample, user] = await Promise.all([use("db"), use("sample"), use("user")]);
   S.sample = sample;
   if (S.view === "scan") renderScanIdle();
@@ -1507,17 +1656,7 @@ initInstall();
   S.uid = (user && await user.id().catch(() => null)) || S.uid;
   S.admin = user ? await user.canEdit().catch(() => false) : false;
   S.cats = []; S.reports = []; S.stations = []; S.me = { points:0, scans:0, newCats:0, reports:0, games:0, best:0 };
-  const sub = (col, fn) => db.collection(col).onSnapshot(q => { S[col] = q.docs.map(d => d.data()); fn && fn(); renderAll(); }, () => {});
-  sub("cats"); sub("reports"); sub("stations");
-  db.collection("players").onSnapshot(async q => {
-    S.players = {}; q.docs.forEach(d => { const v = d.data(); S.players[v.uid || d.id] = v; });
-    const mine = S.players[S.uid]; if (mine) S.me = { ...S.me, ...mine };
-    if (user){ try { const ps = await user.profiles(Object.keys(S.players)); for (const id in ps) S.names[id] = ps[id].name || ""; } catch {} }
-    renderAll();
-  }, () => {});
+  listen(db, async () => { if (user){ try { const ps = await user.profiles(Object.keys(S.players)); for (const id in ps) S.names[id] = ps[id].name || ""; } catch {} } });
   renderAll();
 })();
 </script>
-
-</body>
-</html>
