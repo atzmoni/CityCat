@@ -97,8 +97,8 @@ begin
   new.created_by := old.created_by;
   if public.is_admin() then return new; end if;
   foreach f in array case tg_table_name
-    when 'cats' then array['neutered', 'adoptable', 'notes', 'demo']
-    when 'reports' then array['status', 'demo']
+    when 'cats' then array['neutered', 'adoptable', 'notes', 'verified']
+    when 'reports' then array['status']
     else array[]::text[] end
   loop
     if old.doc ? f then new.doc := jsonb_set(new.doc, array[f], old.doc -> f);

@@ -134,6 +134,13 @@ p{margin:0}
 .reticle::after{content:"";position:absolute;left:6%;right:6%;height:2px;background:var(--ginger);top:10%;animation:sweep 2s ease-in-out infinite alternate;box-shadow:0 0 12px var(--ginger)}
 @keyframes sweep{to{top:90%}}
 @media (prefers-reduced-motion:reduce){.reticle::after{animation:none;top:50%}}
+.catbox{position:absolute;border:3px solid var(--ginger);border-radius:14px;box-shadow:0 0 0 2px #0006,0 0 18px var(--ginger);transition:all .25s ease-out;pointer-events:none}
+.tthumb{display:block;width:36px;height:36px;border-radius:8px;overflow:hidden;background:var(--land-2)}
+.tthumb img,.tthumb svg{width:100%;height:100%;object-fit:cover;display:block}
+.cands{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.cand{display:grid;gap:4px;justify-items:center;text-align:center;border:1px solid var(--line);border-radius:14px;background:var(--paper);color:var(--ink);padding:8px;font:inherit}
+.cand .cph{width:72px;height:72px;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:var(--land-2)}
+.cand .cph img,.cand .cph svg{width:100%;height:100%;object-fit:cover}
 .camlabel{position:absolute;bottom:14px;left:12px;right:12px;text-align:center;font-weight:700;text-shadow:0 1px 4px #000}
 .campick{display:grid;gap:10px;justify-items:center;padding:24px;text-align:center}
 .steps{display:grid;gap:6px;font-size:13.5px}
@@ -295,7 +302,7 @@ th{font-size:12px;color:var(--mute);font-weight:700;background:var(--land)}
   </header>
 
   <main id="main">
-    <div class="demo-flag" id="demoFlag" hidden>מצב הדגמה: הנתונים כאן לדוגמה ונשמרים רק במכשיר הזה.</div>
+    <div class="demo-flag" id="demoFlag" hidden>מצב מקומי: הנתונים נשמרים רק במכשיר הזה עד שמחברים שרת.</div>
 
     <!-- MAP -->
     <section class="view on" id="v-map" aria-label="מפה">
@@ -353,7 +360,7 @@ th{font-size:12px;color:var(--mute);font-weight:700;background:var(--land)}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="config.js"></script>
-<script>window.REAL_MAP = true; window.PWA = true;</script>
+<script>window.REAL_MAP = true; window.PWA = true; window.CAT_DETECT = true;</script>
 <script>
 document.documentElement.lang = "he";
 document.documentElement.dir = "rtl";
@@ -417,41 +424,8 @@ const NAMES = ["מיצי","שוקו","פלפל","לימון","טוסט","קפה"
 const SPOTS_TXT = ["ליד פח הכתום","בחצר אחורית","מתחת לרכב","על גדר","ליד פינת האכלה","בכניסה לבניין","בגינה הציבורית","ליד השוק"];
 const MARKS = ["גרב לבן ברגל ימין","זנב קצר","כתם שחור על האף","עין אחת ירוקה ואחת צהובה","פרווה ארוכה","אוזן שמאל חתוכה (מעוקר)","פס לבן על החזה","שפם לבן בולט","קצה זנב לבן"];
 
-/* ---------- demo data (used only when the shared store is unavailable) ---------- */
+/* ---------- seeded random (avatars) ---------- */
 function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const BASE = Date.parse("2026-10-24T09:00:00Z");
-function demoData(){
-  const r = rng(1983), pick = a => a[Math.floor(r() * a.length)];
-  const weights = { A:6, B:4, C:8, D:5, E:10, F:7, G:9, H:6, J:9 };
-  const neuterBias = { A:.78, B:.8, C:.7, D:.72, E:.66, F:.55, G:.5, H:.42, J:.48 };
-  const cats = [], reports = [], stations = [];
-  let n = 101;
-  for (const d of DISTRICTS){
-    for (let i = 0; i < weights[d.id]; i++){
-      const c = pick(COLORS), [lat, lng] = randInDistrict(d, r);
-      const neutered = r() < neuterBias[d.id];
-      const h = r() < .74 ? "בריא" : pick(HEALTH.slice(1));
-      const first = BASE - Math.floor(r() * 300) * 864e5, last = BASE - Math.floor(r() * 20) * 864e5 - Math.floor(r()*12)*36e5;
-      cats.push({ id:"TLV-0" + (n++), name: NAMES[(n * 7) % NAMES.length], color:c.name, hex:c.hex,
-        pattern: r() < .4 ? "טאבי" : "אחיד", marks: neutered ? "אוזן שמאל חתוכה (מעוקר)" : pick(MARKS.filter(m => !m.includes("חתוכה"))),
-        sex: pick(["נקבה","זכר","לא ידוע"]), age: pick(["בוגר","בוגר","צעיר","גור"]), neutered, health:h,
-        district:d.id, lat, lng, firstSeen:first, lastSeen:Math.max(first,last), sightings: 1 + Math.floor(r() * 14),
-        photo:null, likes:{}, notes:"", demo:true });
-    }
-    for (let i = 0; i < (d.id === "B" ? 1 : 2); i++){ const [lat, lng] = randInDistrict(d, r); stations.push({ id:"st-" + d.id + i, lat, lng, district:d.id, caretaker:"מאכיל/ה רשום/ה", cats: 4 + Math.floor(r()*12), demo:true }); }
-  }
-  const sickCat = cats.find(c => c.health === "פצע או חתך") || cats[3];
-  reports.push({ id:"rp-1", type:"distress", lat:sickCat.lat + .0008, lng:sickCat.lng, district:sickCat.district, created:BASE - 3*36e5, status:"פתוח", desc:"חתול עם פצע ברגל, צולע, ליד הפח", catId:sickCat.id, demo:true });
-  const [l2a, l2b] = randInDistrict(DIST.G, r);
-  reports.push({ id:"rp-2", type:"distress", lat:l2a, lng:l2b, district:"G", created:BASE - 26*36e5, status:"בטיפול", desc:"גורים בלי אמא בחניון", demo:true });
-  const [l3a, l3b] = randInDistrict(DIST.E, r);
-  reports.push({ id:"rp-3", type:"body", lat:l3a, lng:l3b, district:"E", created:BASE - 2*36e5, status:"נשלח לתברואה", desc:"חתול שנדרס בצד הכביש", demo:true });
-  const trail = (d, k) => { const out = []; let [la, lo] = randInDistrict(d, r); for (let i = 0; i < k; i++){ out.push({ lat:la, lng:lo, t:BASE - (k - i) * 18 * 6e4 }); la += (r() - .5) * .006; lo += (r() - .5) * .006; } return out; };
-  const t1 = trail(DIST.C, 4), t2 = trail(DIST.H, 3);
-  reports.push({ id:"rp-4", type:"dog", dogKind:"lost", lat:t1[3].lat, lng:t1[3].lng, district:"C", created:t1[0].t, status:"פתוח", desc:"גולדן צעיר עם קולר אדום, בורח מאנשים", trail:t1, demo:true });
-  reports.push({ id:"rp-5", type:"dog", dogKind:"abandoned", lat:t2[2].lat, lng:t2[2].lng, district:"H", created:t2[0].t, status:"פתוח", desc:"כלבה מעורבת בינונית, רזה, בלי קולר. מסתובבת ליד המרכז המסחרי", trail:t2, demo:true });
-  return { cats, reports, stations };
-}
 
 /* ---------- state ---------- */
 const S = {
@@ -483,7 +457,7 @@ async function del(col, id){
 }
 function strip(o){ return JSON.parse(JSON.stringify(o)); }
 function writeErr(e){ return e && e.code === "permission_denied" ? (PROD ? "רק מנהל האפליקציה יכול לעשות את זה." : "אין לך הרשאת כתיבה. בקש מבעל האפליקציה גישת משתתף.") : e && e.code === "quota_exceeded" ? "המאגר מלא. מנהל האזור צריך לפנות רשומות ישנות." : "השמירה לא הצליחה. נסה שוב בעוד רגע."; }
-function saveLocal(){ store.set("demo", { cats:S.cats, reports:S.reports, stations:S.stations }); }
+function saveLocal(){ store.set("local", { cats:S.cats, reports:S.reports, stations:S.stations }); }
 async function addPoints(n, field){
   S.me.points += n; if (field) S.me[field] = (S.me[field] || 0) + 1;
   renderPts();
@@ -872,7 +846,7 @@ function openCat(id){
   sheet(`<div class="stack">
     <div class="duo"><figure>${c.photo ? `<img src="${c.photo}" alt="תמונה אמיתית של ${esc(c.name)}">` : `<div class="nophoto">אין עדיין תמונה אמיתית.<br>סרוק את ${esc(c.name)} כדי להוסיף.</div>`}<figcaption>התמונה האמיתית</figcaption></figure><figure class="avf">${catAvatar(c)}<figcaption>האווטר</figcaption></figure></div>
     ${idCard(c)}
-    <p class="small muted">נראה לאחרונה ${fmtAgo(c.lastSeen)}${c.notes ? " · " + esc(c.notes) : ""}${c.demo ? " · רשומת דוגמה" : ""}</p>
+    <p class="small muted">נראה לאחרונה ${fmtAgo(c.lastSeen)}${c.notes ? " · " + esc(c.notes) : ""}</p>
     <div class="row"><button class="btn ginger" id="seen">ראיתי אותו עכשיו (+10)</button><button class="btn alert" id="sos">דווח מצוקה</button><button class="btn leaf" id="adopt">אמץ אותי</button></div></div>`,
   s => {
     s.querySelector("#seen").onclick = async () => { await put("cats", { ...c, sightings:(c.sightings || 1) + 1, lastSeen:Date.now() }); addPoints(10, "scans"); toast("התצפית נרשמה. +10 נקודות"); closeSheet(); };
@@ -918,7 +892,7 @@ function openReportCard(id){
   sheet(`<div class="stack"><div class="row"><span class="chip ${chip}">${REP_LABEL[r.type]}</span><span class="chip">${esc(r.status)}</span></div>
     <h2>${esc(r.desc || REP_LABEL[r.type])}</h2>
     ${r.photo ? `<img src="${r.photo}" alt="" style="border-radius:12px">` : ""}
-    <p class="small muted">${esc(DIST[r.district]?.name)} · דווח ${fmtAgo(r.created)}${r.demo ? " · רשומת דוגמה" : ""}</p>
+    <p class="small muted">${esc(DIST[r.district]?.name)} · דווח ${fmtAgo(r.created)}</p>
     ${r.type === "body" ? `<div class="card small">הבקשה עברה לתור התברואה. לפינוי דחוף אפשר להתקשר למוקד העירוני <b>106</b>.</div>` : `<div class="card small">מתנדבי העמותה ומנהל האזור קיבלו התראה. אם אתה ליד החתול, הישאר בקרבת מקום ואל תנסה לתפוס חתול פצוע בידיים.</div>`}
     ${S.admin ? `<button class="btn ghost" id="toAdmin">ניהול הדיווח בפאנל מנהל האזור</button>` : ""}</div>`,
   s => { const b = s.querySelector("#toAdmin"); if (b) b.onclick = () => { closeSheet(); go("me"); adminTab = "queue"; renderMe(); }; });
@@ -1057,8 +1031,9 @@ function renderScanIdle(){
       <label class="small" style="color:#cfd8dd">או <u style="cursor:pointer">בחר תמונה מהגלריה</u><input type="file" id="camFile" accept="image/*" capture="environment" hidden></label>
     </div></div>
     <div class="card row" style="justify-content:space-between"><span class="small">מיקום הסריקה: <b>${esc(scanLocText())}</b></span><span class="row" style="gap:6px">${GEO ? `<button class="btn ghost" id="scanGps" style="padding:6px 12px">המיקום שלי</button>` : ""}<button class="btn ghost" id="scanLoc" style="padding:6px 12px">${S.pick ? "שנה" : "סמן במפה"}</button></span></div>
-    <p class="small muted">${PROD && !S.sample ? "הזיהוי מתבצע במכשיר שלך לפי הצבע והדפוס של הפרווה, ומשווה לחתולים שכבר במאגר." : S.sample ? "הזיהוי מתבצע על ידי Claude, על חשבון הצפייה שלך. בפעם הראשונה תתבקש לאשר." : "הזיהוי כאן הוא הדגמה מקומית לפי צבע. מנוע הבינה המלאכותית זמין כשפותחים את האפליקציה ב-claude.ai."}</p>`;
+    <p class="small muted">${window.CAT_DETECT ? "מנוע זיהוי על המכשיר מוודא שבתמונה יש חתול אמיתי, מתמקד בו, ומשווה אותו לחתולים שכבר במאגר. כלב, אדם, בובה או חפץ לא יירשמו." : PROD && !S.sample ? "הזיהוי מתבצע במכשיר שלך לפי הצבע והדפוס של הפרווה, ומשווה לחתולים שכבר במאגר." : S.sample ? "הזיהוי מתבצע על ידי Claude, על חשבון הצפייה שלך. בפעם הראשונה תתבקש לאשר." : "הזיהוי כאן הוא הדגמה מקומית לפי צבע. מנוע הבינה המלאכותית זמין כשפותחים את האפליקציה ב-claude.ai."}</p>`;
   $("#camStart").onclick = startCam;
+  loadDetector().catch(() => {});
   $("#camFile").onchange = e => { const f = e.target.files[0]; if (f) analyzeFile(f); };
   const sg = $("#scanGps"); if (sg) sg.onclick = () => { sg.textContent = "מאתר…"; locate(false, () => renderScanIdle()); };
   $("#scanLoc").onclick = () => { go("map"); S.picking = () => { go("scan"); renderScanIdle(); }; updatePickHint(); };
@@ -1073,8 +1048,9 @@ async function startCam(){
     return;
   }
   const cam = $("#cam");
-  cam.innerHTML = `<video autoplay playsinline muted></video><div class="reticle"></div><div class="camlabel" id="camLbl">מחפש חתול… החזק את הטלפון יציב</div>`;
+  cam.innerHTML = `<video autoplay playsinline muted></video><div class="reticle"></div><div class="catbox" id="catBox" hidden></div><div class="camlabel" id="camLbl">מחפש חתול… החזק את הטלפון יציב</div>`;
   const v = cam.querySelector("video"); v.srcObject = camStream;
+  if (window.CAT_DETECT) return liveDetect(cam, v);
   const c = document.createElement("canvas"); c.width = 32; c.height = 32; const cx = c.getContext("2d", { willReadFrequently:true });
   let prev = null, steady = 0, started = Date.now();
   scanTimer = setInterval(() => {
@@ -1091,6 +1067,36 @@ async function startCam(){
     }
   }, 300);
 }
+function liveDetect(cam, v){
+  const lbl = $("#camLbl"), boxEl = $("#catBox"); let hits = 0, busy = false, model = null, failed = false;
+  const started = Date.now();
+  cam.querySelector(".reticle").style.display = "none";
+  lbl.textContent = "טוען מנוע זיהוי (בפעם הראשונה בלבד)…";
+  loadDetector().then(m => { model = m; }, () => { failed = true; });
+  const capture = () => {
+    const f = document.createElement("canvas"); const sc = 900 / Math.max(v.videoWidth, v.videoHeight);
+    f.width = Math.round(v.videoWidth * sc); f.height = Math.round(v.videoHeight * sc); f.getContext("2d").drawImage(v, 0, 0, f.width, f.height);
+    stopCam(); f.toBlob(b => analyzeBlob(b, f), "image/jpeg", .85);
+  };
+  scanTimer = setInterval(async () => {
+    if (failed){ stopCam(); renderNoCat({ why:"offline" }); return; }
+    if (!model || busy || !v.videoWidth) return;
+    busy = true;
+    const d = await detectCat(v).catch(() => ({ ok:false }));
+    busy = false;
+    if (!camStream) return;
+    if (d.ok){
+      const r = cam.getBoundingClientRect(), sc = Math.max(r.width / v.videoWidth, r.height / v.videoHeight);
+      const ox = (r.width - v.videoWidth * sc) / 2, oy = (r.height - v.videoHeight * sc) / 2, [x, y, w, h] = d.box;
+      Object.assign(boxEl.style, { left:ox + x * sc + "px", top:oy + y * sc + "px", width:w * sc + "px", height:h * sc + "px" }); boxEl.hidden = false;
+      hits++; lbl.textContent = `זוהה חתול ${Math.round(d.score * 100)}%… ` + "●".repeat(Math.min(hits, 3));
+      if (hits >= 3) capture();
+    } else {
+      hits = 0; boxEl.hidden = true;
+      lbl.textContent = d.why === "far" ? "התקרב לחתול" : d.seen ? `זה ${OTHER_HE[d.seen] || "לא חתול"}. מחפש חתול…` : Date.now() - started > 15000 ? "לא רואה חתול. התקרב, או בחר תמונה מהגלריה" : "מחפש חתול…";
+    }
+  }, 350);
+}
 async function analyzeFile(file){
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); }).catch(() => null);
   if (!img){ toast("לא הצלחתי לקרוא את התמונה. נסה תמונה אחרת."); return; }
@@ -1098,22 +1104,96 @@ async function analyzeFile(file){
   f.width = Math.round(img.width * sc); f.height = Math.round(img.height * sc); f.getContext("2d").drawImage(img, 0, 0, f.width, f.height);
   f.toBlob(b => analyzeBlob(b, f), "image/jpeg", .85);
 }
+/* On-device cat check (site build), two stages:
+   1. COCO-SSD finds animals and their boxes (it alone calls some white dogs, foxes and ferrets "cat").
+   2. MobileNet (ImageNet) confirms the crop is a domestic cat: the five house-cat classes must reach 50% and beat all dog breeds.
+   Only a confirmed cat gets registered, and its fingerprint uses the cat, not the background. */
+const CAT_CLS_URL = "https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.50_224/model.json";
+const TF_JS = ["https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js", "https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"];
+const OTHER_HE = { dog:"כלב", person:"אדם", "teddy bear":"בובה", bird:"ציפור", horse:"סוס", sheep:"כבשה", cow:"פרה", bear:"דוב", car:"מכונית", "cell phone":"טלפון", tv:"מסך", laptop:"מחשב", pizza:"אוכל", sandwich:"אוכל", cake:"אוכל", chair:"כיסא", couch:"ספה", bed:"מיטה", "potted plant":"עציץ", bench:"ספסל" };
+let detP = null;
+function loadScript(src){ return new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); }); }
+function loadDetector(){
+  if (!window.CAT_DETECT) return Promise.resolve(null);
+  if (!detP) detP = (async () => {
+    for (const u of TF_JS) if (!(u.includes("coco") ? window.cocoSsd : window.tf)) await loadScript(u);
+    const [det, cls] = await Promise.all([cocoSsd.load({ base:"lite_mobilenet_v2" }), tf.loadLayersModel(CAT_CLS_URL)]);
+    return { det, cls };
+  })().catch(e => { detP = null; throw e; });
+  return detP;
+}
+const ANIMALS = ["cat", "dog", "bear", "teddy bear", "sheep", "bird", "horse", "cow"];
+// Share of house cats (ImageNet 281-285: tabby, tiger cat, Persian, Siamese, Egyptian) and of dog breeds (151-268) in one region.
+function catOdds(cls, src, box){
+  return tf.tidy(() => {
+    let t = tf.browser.fromPixels(src);
+    if (box){ const [x, y, w, h] = box.map(Math.round); t = t.slice([Math.max(0, y), Math.max(0, x), 0], [Math.max(1, Math.min(h, t.shape[0] - y)), Math.max(1, Math.min(w, t.shape[1] - x)), 3]); }
+    const pr = cls.predict(tf.image.resizeBilinear(t.toFloat(), [224, 224]).div(127.5).sub(1).expandDims(0)).dataSync();
+    let cat = 0, dog = 0; for (let i = 281; i <= 285; i++) cat += pr[i]; for (let i = 151; i <= 268; i++) dog += pr[i];
+    return { cat, dog };
+  });
+}
+async function detectCat(src){
+  let m; try { m = await loadDetector(); } catch { return { ok:false, why:"offline" }; }
+  const w = src.videoWidth || src.width, h = src.videoHeight || src.height;
+  const preds = (await m.det.detect(src, 10, .3)).sort((a, b) => (b.class === "cat") - (a.class === "cat") || b.score - a.score);
+  const regions = preds.filter(p => ANIMALS.includes(p.class)).slice(0, 3).map(p => p.bbox).concat([null]);
+  let dogSeen = 0;
+  for (const box of regions){
+    const o = catOdds(m.cls, src, box); dogSeen = Math.max(dogSeen, o.dog);
+    if (o.cat >= .5 && o.cat > o.dog){
+      const b = box || [0, 0, w, h];
+      if (b[2] * b[3] / (w * h) < .02) return { ok:false, why:"far" };
+      return { ok:true, box:b, score:o.cat };
+    }
+  }
+  const other = preds.find(p => p.class !== "cat" && p.score >= .5);
+  return { ok:false, why:"none", seen: dogSeen >= .5 ? "dog" : other ? other.class : null };
+}
+function cropTo(canvas, box){
+  const [x, y, w, h] = box, pad = .08, X = Math.max(0, x - w * pad), Y = Math.max(0, y - h * pad);
+  const W2 = Math.min(canvas.width - X, w * (1 + 2 * pad)), H2 = Math.min(canvas.height - Y, h * (1 + 2 * pad));
+  const c = document.createElement("canvas"); const sc = Math.min(1, 640 / Math.max(W2, H2));
+  c.width = Math.round(W2 * sc); c.height = Math.round(H2 * sc); c.getContext("2d").drawImage(canvas, X, Y, W2, H2, 0, 0, c.width, c.height);
+  return c;
+}
+function thumbOf(canvas){ const t = document.createElement("canvas"); const sc = 480 / Math.max(canvas.width, canvas.height); t.width = Math.round(canvas.width * sc); t.height = Math.round(canvas.height * sc); t.getContext("2d").drawImage(canvas, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", .7); }
+function askCandidates(cands){
+  return new Promise(done => {
+    const el = $("#scanMore"); if (!el){ done(null); return; }
+    el.innerHTML = `<div class="card stack"><h3>נראה מוכר. זה אחד מהם?</h3><p class="small muted">המנוע מצא חתולים דומים באזור. בחר אם זה אותו חתול, כדי שלא יירשם פעמיים.</p>
+      <div class="cands">${cands.map((x, i) => `<button class="cand" data-c="${i}"><span class="cph">${x.cat.photo ? `<img src="${x.cat.photo}" alt="">` : catAvatar(x.cat)}</span><b>${esc(x.cat.name)}</b><span class="small muted">${esc(x.cat.id)} · דמיון ${x.sim}%</span></button>`).join("")}</div>
+      <button class="btn ghost block" id="candNew">לא, זה חתול חדש</button></div>`;
+    el.querySelectorAll("[data-c]").forEach(b => b.onclick = () => done(cands[+b.dataset.c].cat));
+    $("#candNew").onclick = () => done(null);
+  });
+}
 function stepsHtml(i){
   const st = ["זיהוי חתול בתמונה","ניתוח צבע וסימנים","בדיקת מצב בריאות","השוואה למאגר החתולים באזור"];
   return `<div class="steps">${st.map((t, n) => `<div class="${n < i ? "done" : n === i ? "run" : ""}"><i></i>${t}</div>`).join("")}</div>`;
 }
 async function analyzeBlob(blob, canvas){
+  let det = null, inner = .6;
+  if (window.CAT_DETECT){
+    $("#scanPad").innerHTML = `<div class="cam"><img class="shot" src="${canvas.toDataURL("image/jpeg", .7)}" alt=""><div class="camlabel">בודק שיש חתול בתמונה…</div></div>`;
+    const td = performance.now();
+    det = await detectCat(canvas);
+    if (!det.ok){ renderNoCat(det); return; }
+    det.ms = Math.round(performance.now() - td);
+    canvas = cropTo(canvas, det.box); inner = .85;
+    blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", .85));
+  }
   const t0 = performance.now();
-  const thumb = (() => { const t = document.createElement("canvas"); const sc = 480 / Math.max(canvas.width, canvas.height); t.width = Math.round(canvas.width * sc); t.height = Math.round(canvas.height * sc); t.getContext("2d").drawImage(canvas, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", .7); })();
+  const thumb = thumbOf(canvas);
   const loc = S.pick || (() => { const [lat, lng] = distCenter(DIST.E); return { lat, lng, district:"E" }; })();
   // Fast path: on-device fingerprint + colour, answered in milliseconds. Claude refines in the background.
-  const local = localAnalyze(canvas, loc);
+  const local = localAnalyze(canvas, loc, inner);
   const quickMatch = local.matchId && local.matchConfidence >= .8 ? S.cats.find(c => c.id === local.matchId) : null;
   let cat = quickMatch ? { ...quickMatch } : draftCat(local, loc, thumb);
   cat.fp = local.fp;
   const ms = Math.round(performance.now() - t0);
   const pending = !quickMatch && !!S.sample;
-  renderReveal(cat, thumb, { match:!!quickMatch, pending, ms, engine:"fast" });
+  renderReveal(cat, thumb, { match:!!quickMatch, pending, ms, engine:"fast", det });
   let res = null, engine = "fast";
   if (pending){
     try { res = await aiAnalyze(blob, loc); engine = "ai"; }
@@ -1121,7 +1201,8 @@ async function analyzeBlob(blob, canvas){
   }
   if (res && res.isCat === false){ renderNoCat(); return; }
   const aiMatch = res && res.matchId && (res.matchConfidence ?? 0) >= .55 ? S.cats.find(c => c.id === res.matchId) : null;
-  const match = quickMatch || aiMatch || (!S.sample && local.matchId ? S.cats.find(c => c.id === local.matchId) : null);
+  let match = quickMatch || aiMatch;
+  if (!match && !S.sample && local.cands.length) match = await askCandidates(local.cands);
   let pts;
   if (match){
     cat = { ...match, sightings:(match.sightings || 1) + 1, lastSeen:Date.now(), photo:match.photo || thumb, fp:local.fp };
@@ -1134,7 +1215,7 @@ async function analyzeBlob(blob, canvas){
     pts = 25; S.me.newCats = (S.me.newCats || 0) + 1; addPoints(pts, "scans");
   }
   await put("cats", cat);
-  finishReveal(cat, { match:!!match, pts, res, engine, ms, local });
+  finishReveal(cat, { match:!!match, pts, res, engine, ms, local, det });
 }
 function draftCat(r, loc, thumb, prev){
   const col = COLORS.find(c => c.name === r.color) || COLORS[0];
@@ -1142,10 +1223,14 @@ function draftCat(r, loc, thumb, prev){
     color:col.name, hex:col.hex, pattern:r.pattern || "", marks:r.marks || "", sex:r.sex || "לא ידוע", age:r.age || "בוגר",
     neutered:r.earTipped === true ? true : r.earTipped === false ? false : null, health:HEALTH.includes(r.health) ? r.health : "בריא",
     district:loc.district, lat:prev?.lat ?? loc.lat + (Math.random() - .5) * .0012, lng:prev?.lng ?? loc.lng + (Math.random() - .5) * .0012,
-    firstSeen:Date.now(), lastSeen:Date.now(), sightings:1, photo:thumb, likes:{}, notes:"", by:S.uid };
+    firstSeen:Date.now(), lastSeen:Date.now(), sightings:1, photo:thumb, likes:{}, notes:"", by:S.uid, verified:!!S.admin };
 }
-function renderNoCat(){
-  $("#scanPad").innerHTML = `<div class="card stack"><h2>לא זיהיתי חתול</h2><p class="muted">נסה להתקרב, לשים את החתול במרכז המסגרת ולוודא שיש מספיק אור.</p><button class="btn ginger" id="again">סרוק שוב</button></div>`;
+function renderNoCat(det = {}){
+  const msg = det.why === "offline" ? ["מנוע הזיהוי לא נטען", "בפעם הראשונה צריך חיבור לאינטרנט כדי להוריד את מנוע הזיהוי. אחר כך הוא עובד גם בלי רשת."]
+    : det.why === "far" ? ["החתול רחוק מדי", "התקרב כך שהחתול ימלא לפחות רבע מהמסגרת, וסרוק שוב."]
+    : det.seen ? [`זיהיתי ${OTHER_HE[det.seen] || "משהו אחר"}, לא חתול`, "האפליקציה רושמת רק חתולים אמיתיים. כוון את המצלמה לחתול וסרוק שוב."]
+    : ["לא זיהיתי חתול", "האפליקציה רושמת רק חתולים אמיתיים. נסה להתקרב, לשים את החתול במרכז המסגרת ולוודא שיש מספיק אור."];
+  $("#scanPad").innerHTML = `<div class="card stack"><h2>${msg[0]}</h2><p class="muted">${msg[1]}</p><button class="btn ginger" id="again">סרוק שוב</button></div>`;
   $("#again").onclick = renderScanIdle;
 }
 function sparks(n){
@@ -1166,7 +1251,7 @@ function renderReveal(cat, photo, o){
       <div class="face front" id="idFront">${idCard(cat, { pending:o.pending, match:o.match, isNew:!o.match && !o.pending })}</div>
       <div class="face back"><div class="cardback"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="22" r="15" fill="#fff"/><path d="M7 14 9 3l9 7M33 14 31 3l-9 7" fill="#fff"/></svg><b>חתולי ת״א</b><span>מחולל תעודות</span></div></div>
     </div></div></div>
-    <div id="scanMore" class="stack"><div class="card small row" style="justify-content:space-between"><span><b>זיהוי מהיר:</b> ${o.ms} מ״ש על המכשיר</span>${o.pending ? `<span class="chip sea">Claude מאמת מול המאגר…</span>` : ""}</div></div>`;
+    <div id="scanMore" class="stack"><div class="card small row" style="justify-content:space-between"><span>${o.det ? `<b>חתול זוהה</b> (${Math.round(o.det.score * 100)}%) · ` : ""}<b>זיהוי מהיר:</b> ${o.ms} מ״ש על המכשיר</span>${o.pending ? `<span class="chip sea">Claude מאמת מול המאגר…</span>` : ""}</div></div>`;
   bindTilt();
 }
 function bindTilt(){
@@ -1183,7 +1268,7 @@ function finishReveal(cat, o){
   const res = o.res;
   $("#scanMore").innerHTML = `
     <div class="row" style="justify-content:space-between"><h2>${o.match ? "החתול נמצא במאגר" : "חתול חדש נרשם"}</h2><span class="chip ginger">+${o.pts} נק׳</span></div>
-    <div class="card small"><b>זיהוי מהיר:</b> ${o.ms} מ״ש על המכשיר${o.engine === "ai" ? ` · <b>Claude:</b> ${esc(res.summary || "")}${o.match && res.matchConfidence ? ` · ודאות התאמה ${Math.round(res.matchConfidence * 100)}%` : ""}` : o.match ? " · התאמה לפי טביעת אצבע חזותית" : " · נשמר לפי צבע וטביעת אצבע"}</div>
+    <div class="card small">${o.det ? `<b>חתול אמיתי זוהה</b> בוודאות ${Math.round(o.det.score * 100)}% (${o.det.ms} מ״ש) · ` : ""}<b>זיהוי מהיר:</b> ${o.ms} מ״ש על המכשיר${o.engine === "ai" ? ` · <b>Claude:</b> ${esc(res.summary || "")}${o.match && res.matchConfidence ? ` · ודאות התאמה ${Math.round(res.matchConfidence * 100)}%` : ""}` : o.match ? " · התאמה לפי טביעת מראה" : " · נשמר לפי צבע וטביעת מראה"}</div>
     ${res && res.distress ? `<div class="card" style="background:var(--alert-soft);border:0"><b style="color:var(--alert)">המנוע זיהה סימני מצוקה</b><p class="small">${esc(res.distressReason || cat.health)}</p><button class="btn alert" id="toSos" style="margin-top:8px">סמן אות עזרה במפה</button></div>` : ""}
     ${!o.match ? `<label class="f">רוצה לתת שם אחר?<input type="text" id="rename" value="${esc(cat.name)}"></label>` : ""}
     <div class="row"><button class="btn ginger" id="again">סרוק חתול נוסף</button><button class="btn ghost" id="onMap">הצג במפה</button><button class="btn leaf" id="adoptMe">אמץ אותי</button></div>`;
@@ -1212,9 +1297,9 @@ ${known || "(המאגר באזור ריק)"}
   return await S.sample.json(prompt, { images:[blob], modelTier:"quick" });
 }
 /* Visual fingerprint: 4x4 grid of mean colours over the centre of the frame + a 12-bin hue histogram. 60 numbers, computed in a few ms. */
-function fingerprint(canvas){
+function fingerprint(canvas, inner = .6){
   const c = document.createElement("canvas"); c.width = 24; c.height = 24; const x = c.getContext("2d", { willReadFrequently:true });
-  const w = canvas.width, h = canvas.height; x.drawImage(canvas, w * .2, h * .2, w * .6, h * .6, 0, 0, 24, 24);
+  const w = canvas.width, h = canvas.height, m = (1 - inner) / 2; x.drawImage(canvas, w * m, h * m, w * inner, h * inner, 0, 0, 24, 24);
   const d = x.getImageData(0, 0, 24, 24).data, fp = [], hist = new Array(12).fill(0);
   for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++){
     let r = 0, g = 0, b = 0, n = 0;
@@ -1226,17 +1311,17 @@ function fingerprint(canvas){
   return fp.concat(hist.map(v => Math.round(v / tot * 255)));
 }
 function fpDist(a, b){ if (!a || !b || a.length !== b.length) return 999; let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; }
-function localAnalyze(canvas, loc){
-  const fp = fingerprint(canvas);
+function localAnalyze(canvas, loc, inner){
+  const fp = fingerprint(canvas, inner);
   let r = 0, g = 0, b = 0; for (let i = 15; i < 33; i += 3){ r += fp[i]; g += fp[i+1]; b += fp[i+2]; } r /= 6; g /= 6; b /= 6;
   const hex2 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
   let best = COLORS[0], bd = 1e9; for (const col of COLORS.slice(0, 5).concat(COLORS[7])){ const [R, G, B] = hex2(col.hex); const dd = (R - r) ** 2 + (G - g) ** 2 + (B - b) ** 2; if (dd < bd){ bd = dd; best = col; } }
-  const near = nearbyCats(loc);
-  let m = null, md = 999; for (const c of near){ const dd = fpDist(fp, c.fp); if (dd < md){ md = dd; m = c; } }
-  let matchId = null, conf = 0;
-  if (m && md < 14){ matchId = m.id; conf = Math.max(.8, 1 - md / 40); }
-  else { const cand = near.find(x => x.color === best.name && x.district === loc.district); if (cand){ matchId = cand.id; conf = .5; } }
-  return { isCat:true, fp, color:best.name, pattern:"", marks:"", sex:"לא ידוע", age:"בוגר", earTipped:null, health:"בריא", distress:false, matchId, matchConfidence:conf, nameSuggestion:NAMES[Math.floor(Math.random() * NAMES.length)], summary:"" };
+  // Ranked look-alikes: a near-identical fingerprint matches on its own, close ones are offered to the user to confirm.
+  const ranked = nearbyCats(loc).map(c => ({ c, d:fpDist(fp, c.fp) })).filter(x => x.d < 22).sort((a, b) => a.d - b.d);
+  const top = ranked[0];
+  const matchId = top && top.d < 12 ? top.c.id : null, conf = matchId ? Math.max(.8, 1 - top.d / 40) : 0;
+  const cands = ranked.slice(0, 3).map(x => ({ cat:x.c, sim:Math.round(Math.max(0, 1 - x.d / 40) * 100) }));
+  return { isCat:true, fp, color:best.name, pattern:"", marks:"", sex:"לא ידוע", age:"בוגר", earTipped:null, health:"בריא", distress:false, matchId, matchConfidence:conf, cands, nameSuggestion:NAMES[Math.floor(Math.random() * NAMES.length)], summary:"" };
 }
 
 
@@ -1370,14 +1455,15 @@ function renderMe(){
     ${PROD && !S.admin ? "" : `<div class="card stack"><div class="row" style="justify-content:space-between"><h3>${PROD ? "פאנל ניהול" : "פאנל מנהל אזור"}</h3>${S.admin ? `<span class="chip leaf">יש לך גישה</span>` : `<span class="chip">למנהלי אזור בלבד</span>`}</div>
       ${S.admin ? adminHtml() : `<p class="small muted">מנהלי אזור רואים נתוני אמת לפי אזור, משנים רשומות ומטפלים בדיווחים. בעל האפליקציה נותן הרשאת עורך כדי לפתוח את הפאנל.</p>`}
     </div>`}
-    <div class="card stack small"><h3>על הנתונים</h3><p>בתל אביב-יפו חיים לפי הערכה כ-40,000 חתולי רחוב, וכ-5,000 תושבים מאכילים אותם. כדי לעצור את גידול האוכלוסייה צריך לעקר לפחות 75% מכל מושבה. האפליקציה מודדת בדיוק את זה, אזור אחרי אזור.</p><p class="muted">המפה כאן סכמטית. גרסת הפקה תשתמש במפות Google עם מפתח API.</p></div>`;
+    <div class="card stack small"><h3>על הנתונים</h3><p>בתל אביב-יפו חיים לפי הערכה כ-40,000 חתולי רחוב, וכ-5,000 תושבים מאכילים אותם. כדי לעצור את גידול האוכלוסייה צריך לעקר לפחות 75% מכל מושבה. האפליקציה מודדת בדיוק את זה, אזור אחרי אזור.</p></div>`;
   if (S.admin) bindAdmin();
   const so = $("#signOut"); if (so) so.onclick = async () => { so.disabled = true; await S.sb.auth.signOut().catch(() => {}); location.reload(); };
 }
 function adminHtml(){
   const st = distStats();
   const tot = Object.values(st).reduce((a, v) => ({ cats:a.cats + v.cats, neut:a.neut + v.neut, known:a.known + v.known, sick:a.sick + v.sick, open:a.open + v.open }), { cats:0, neut:0, known:0, sick:0, open:0 });
-  const tabs = `<div class="tabs2"><button data-at="stats" aria-pressed="${adminTab === "stats"}">נתונים</button><button data-at="queue" aria-pressed="${adminTab === "queue"}">דיווחים (${tot.open})</button><button data-at="cats" aria-pressed="${adminTab === "cats"}">מאגר חתולים</button><button data-at="vols" aria-pressed="${adminTab === "vols"}">מתנדבים</button><button data-at="adopt" aria-pressed="${adminTab === "adopt"}">אימוץ</button></div>`;
+  const pend = S.cats.filter(c => c.verified === false).length;
+  const tabs = `<div class="tabs2"><button data-at="stats" aria-pressed="${adminTab === "stats"}">נתונים</button><button data-at="queue" aria-pressed="${adminTab === "queue"}">דיווחים (${tot.open})</button><button data-at="cats" aria-pressed="${adminTab === "cats"}">מאגר חתולים${pend ? ` (${pend} לאימות)` : ""}</button><button data-at="st" aria-pressed="${adminTab === "st"}">פינות האכלה</button><button data-at="vols" aria-pressed="${adminTab === "vols"}">מתנדבים</button><button data-at="adopt" aria-pressed="${adminTab === "adopt"}">אימוץ</button></div>`;
   let body = "";
   if (adminTab === "stats"){
     body = `<div class="kpis">
@@ -1388,7 +1474,8 @@ function adminHtml(){
       <div class="tablewrap"><table><thead><tr><th>אזור</th><th>חתולים</th><th>מעוקרים</th><th></th><th>חולים</th><th>פתוחים</th></tr></thead><tbody>
       ${DISTRICTS.map(d => { const v = st[d.id], p = v.known ? v.neut / v.known : 0; return `<tr><td><b>${d.name}</b></td><td>${v.cats}</td><td>${Math.round(p * 100)}%</td><td><div class="bar"><i style="width:${Math.round(p * 100)}%;background:${neutColor(p)}"></i></div></td><td>${v.sick}</td><td>${v.open}</td></tr>`; }).join("")}
       </tbody></table></div>
-      <p class="small muted">הקו בכל עמודה מסמן את סף ה-75% שמעליו האוכלוסייה מפסיקה לגדול. אזורים באדום הם עדיפות ראשונה לתור העיקורים.</p>`;
+      <p class="small muted">הקו בכל עמודה מסמן את סף ה-75% שמעליו האוכלוסייה מפסיקה לגדול. אזורים באדום הם עדיפות ראשונה לתור העיקורים.</p>
+      <div class="row"><button class="btn ghost" data-csv="cats">ייצוא חתולים לאקסל</button><button class="btn ghost" data-csv="reports">ייצוא דיווחים לאקסל</button></div>`;
   } else if (adminTab === "queue"){
     const open = [...S.reports].sort((a, b) => b.created - a.created);
     const opts = { distress:["פתוח","בטיפול","טופל"], dog:["פתוח","הועבר לכלבייה","נמצא הבעלים"], body:["נשלח לתברואה","נאסף"] };
@@ -1396,15 +1483,19 @@ function adminHtml(){
       <p class="small">${esc(r.desc)}</p>
       <div class="row"><select data-status="${esc(r.id)}" aria-label="סטטוס" style="width:auto">${opts[r.type].map(o => `<option ${o === r.status ? "selected" : ""}>${o}</option>`).join("")}</select><button class="btn ghost" data-goto="${esc(r.id)}" style="padding:8px 12px">במפה</button><button class="btn ghost" data-delrep="${esc(r.id)}" style="padding:8px 12px">מחק</button></div></div>`).join("") : `<p class="small muted">אין דיווחים.</p>`;
   } else if (adminTab === "cats"){
-    const list = S.cats.filter(c => adminDist === "all" || c.district === adminDist).sort((a, b) => b.lastSeen - a.lastSeen);
-    body = `<select id="adDist" aria-label="סינון אזור"><option value="all">כל האזורים</option>${DISTRICTS.map(d => `<option value="${d.id}" ${adminDist === d.id ? "selected" : ""}>${d.name}</option>`).join("")}</select>
-      <div class="tablewrap"><table><thead><tr><th>ת.ז</th><th>שם</th><th>אזור</th><th>מעוקר</th><th>בריאות</th><th>לאימוץ</th><th>נראה</th><th></th></tr></thead><tbody>
-      ${list.map(c => `<tr><td>${esc(c.id)}</td><td>${esc(c.name)}</td><td>${esc(DIST[c.district]?.name)}</td>
+    const list = S.cats.filter(c => (adminDist === "all" || adminDist === "pending" ? true : c.district === adminDist) && (adminDist !== "pending" || c.verified === false)).sort((a, b) => b.lastSeen - a.lastSeen);
+    body = `<select id="adDist" aria-label="סינון"><option value="all">כל האזורים</option><option value="pending" ${adminDist === "pending" ? "selected" : ""}>ממתינים לאימות (${pend})</option>${DISTRICTS.map(d => `<option value="${d.id}" ${adminDist === d.id ? "selected" : ""}>${d.name}</option>`).join("")}</select>
+      <div class="tablewrap"><table><thead><tr><th></th><th>ת.ז</th><th>שם</th><th>אזור</th><th>מעוקר</th><th>בריאות</th><th>לאימוץ</th><th>נראה</th><th></th></tr></thead><tbody>
+      ${list.map(c => `<tr><td><span class="tthumb">${c.photo ? `<img src="${c.photo}" alt="">` : catAvatar(c)}</span></td><td>${esc(c.id)}${c.verified === false ? `<br><button class="btn leaf" data-ver="${esc(c.id)}" style="padding:3px 8px;font-size:12px">אשר</button>` : ""}</td><td>${esc(c.name)}</td><td>${esc(DIST[c.district]?.name)}</td>
         <td><select data-neut="${esc(c.id)}" aria-label="עיקור"><option value="1" ${c.neutered ? "selected" : ""}>כן</option><option value="0" ${c.neutered === false ? "selected" : ""}>לא</option><option value="" ${c.neutered == null ? "selected" : ""}>?</option></select></td>
         <td><select data-health="${esc(c.id)}" aria-label="בריאות">${HEALTH.map(h => `<option ${h === c.health ? "selected" : ""}>${h}</option>`).join("")}</select></td>
-        <td><input type="checkbox" data-adt="${esc(c.id)}" ${isAdoptable(c) ? "checked" : ""} aria-label="מוצע לאימוץ"></td><td>${fmtAgo(c.lastSeen)}</td><td><button class="btn ghost" data-delcat="${esc(c.id)}" style="padding:4px 10px">מחק</button></td></tr>`).join("")}
+        <td><input type="checkbox" data-adt="${esc(c.id)}" ${isAdoptable(c) ? "checked" : ""} aria-label="מוצע לאימוץ"></td><td>${fmtAgo(c.lastSeen)}</td><td class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn ghost" data-merge="${esc(c.id)}" style="padding:4px 10px">מזג</button><button class="btn ghost" data-delcat="${esc(c.id)}" style="padding:4px 10px">מחק</button></td></tr>`).join("")}
       </tbody></table></div>
-      <p class="small muted">${list.length} רשומות. שינוי נשמר מיד ומתעדכן לכל המשתמשים.</p>`;
+      <p class="small muted">${list.length} רשומות. שינוי נשמר מיד ומתעדכן לכל המשתמשים. חתול שנרשם פעמיים? "מזג" מאחד את שתי הרשומות לאחת.</p>`;
+  } else if (adminTab === "st"){
+    const sts = [...S.stations].sort((a, b) => (a.district > b.district ? 1 : -1));
+    body = `<button class="btn ginger" id="addSt">הוספת פינת האכלה במפה</button>
+      ${sts.length ? `<div class="tablewrap"><table><thead><tr><th>אזור</th><th>מאכיל/ה</th><th>חתולים</th><th></th></tr></thead><tbody>${sts.map(st => `<tr><td>${esc(DIST[st.district]?.name)}</td><td>${esc(st.caretaker)}</td><td>${esc(st.cats)}</td><td class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn ghost" data-stgo="${esc(st.id)}" style="padding:4px 10px">במפה</button><button class="btn ghost" data-delst="${esc(st.id)}" style="padding:4px 10px">מחק</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="small muted">עוד אין פינות האכלה. פינות האכלה הן המושבות שהעמותה מלווה: כל אחת עם מאכיל/ה אחראי/ת ומספר חתולים משוער.</p>`}`;
   } else if (adminTab === "adopt"){
     body = `<div id="adoptList" class="small muted">טוען…</div>`;
   } else {
@@ -1421,10 +1512,56 @@ function bindAdmin(){
   P.querySelectorAll("[data-neut]").forEach(s => s.onchange = () => { const c = S.cats.find(x => x.id === s.dataset.neut); put("cats", { ...c, neutered:s.value === "" ? null : s.value === "1" }); });
   P.querySelectorAll("[data-health]").forEach(s => s.onchange = () => { const c = S.cats.find(x => x.id === s.dataset.health); put("cats", { ...c, health:s.value }); });
   P.querySelectorAll("[data-adt]").forEach(x => x.onchange = () => { const c = S.cats.find(y => y.id === x.dataset.adt); put("cats", { ...c, adoptable:x.checked }); });
+  P.querySelectorAll("[data-ver]").forEach(b => b.onclick = () => { const c = S.cats.find(x => x.id === b.dataset.ver); put("cats", { ...c, verified:true }); toast("החתול אושר"); });
+  P.querySelectorAll("[data-merge]").forEach(b => b.onclick = () => openMerge(b.dataset.merge));
+  P.querySelectorAll("[data-csv]").forEach(b => b.onclick = () => exportCsv(b.dataset.csv));
+  P.querySelectorAll("[data-stgo]").forEach(b => b.onclick = () => { const st = S.stations.find(x => x.id === b.dataset.stgo); go("map"); centerOn(st.lat, st.lng, 220); });
+  P.querySelectorAll("[data-delst]").forEach(b => b.onclick = () => { if (b.dataset.armed) del("stations", b.dataset.delst); else { b.dataset.armed = 1; b.textContent = "בטוח?"; } });
+  const as = $("#addSt"); if (as) as.onclick = () => { go("map"); toast("לחץ על המפה במקום של פינת ההאכלה"); S.pick = null; S.picking = () => { go("me"); openAddStation(); }; updatePickHint(); };
   P.querySelectorAll("[data-delcat]").forEach(b => b.onclick = () => { if (b.dataset.armed){ del("cats", b.dataset.delcat); } else { b.dataset.armed = 1; b.textContent = "בטוח?"; } });
   const ad = $("#adDist"); if (ad) ad.onchange = () => { adminDist = ad.value; renderMe(); };
   if (adminTab === "vols") loadVols();
   if (adminTab === "adopt") loadAdopt();
+}
+function openAddStation(){
+  if (!S.pick) return;
+  sheet(`<div class="stack"><h2>פינת האכלה חדשה</h2><p class="small muted">${esc(DIST[S.pick.district]?.name)}</p>
+    <label class="f">שם המאכיל/ה (יוצג לכל המשתמשים)<input type="text" id="stCare" maxlength="40" placeholder="למשל: רינה מהבניין"></label>
+    <label class="f">כמה חתולים אוכלים כאן בערך?<input type="text" id="stCats" inputmode="numeric" value="5"></label>
+    <button class="btn ginger block" id="stSave">שמירה</button></div>`, s => {
+    s.querySelector("#stSave").onclick = async () => {
+      const n = parseInt(s.querySelector("#stCats").value, 10);
+      await put("stations", { id:"st-" + uidShort(), lat:S.pick.lat, lng:S.pick.lng, district:S.pick.district, caretaker:s.querySelector("#stCare").value.trim().slice(0, 40) || "מאכיל/ה רשום/ה", cats:Number.isFinite(n) && n > 0 ? Math.min(n, 200) : 1, created:Date.now(), by:S.uid });
+      closeSheet(); adminTab = "st"; renderMe(); toast("פינת ההאכלה נוספה");
+    };
+  });
+}
+function openMerge(id){
+  const a = S.cats.find(x => x.id === id); if (!a) return;
+  const sims = S.cats.filter(c => c.id !== a.id).map(c => ({ c, d:a.fp && c.fp ? fpDist(a.fp, c.fp) : 60 + (c.color === a.color ? 0 : 30) + (c.district === a.district ? 0 : 20) })).sort((x, y) => x.d - y.d).slice(0, 8);
+  sheet(`<div class="stack"><h2>מיזוג ${esc(a.name)} (${esc(a.id)})</h2><p class="small muted">בחר את הרשומה שנשארת. התצפיות, הלייקים והדיווחים של ${esc(a.name)} יעברו אליה, ו-${esc(a.id)} יימחק. הכי דומים מופיעים ראשונים.</p>
+    <div class="cands">${sims.map(({ c }) => `<button class="cand" data-into="${esc(c.id)}"><span class="cph">${c.photo ? `<img src="${c.photo}" alt="">` : catAvatar(c)}</span><b>${esc(c.name)}</b><span class="small muted">${esc(c.id)} · ${esc(DIST[c.district]?.name)}</span></button>`).join("") || `<p class="small muted">אין רשומות אחרות.</p>`}</div></div>`, s => {
+    s.querySelectorAll("[data-into]").forEach(b => b.onclick = async () => { closeSheet(); await mergeCats(a.id, b.dataset.into); toast("הרשומות מוזגו"); });
+  });
+}
+async function mergeCats(fromId, intoId){
+  const a = S.cats.find(x => x.id === fromId), b = S.cats.find(x => x.id === intoId); if (!a || !b) return;
+  await put("cats", { ...b, sightings:(a.sightings || 1) + (b.sightings || 1), firstSeen:Math.min(a.firstSeen, b.firstSeen), lastSeen:Math.max(a.lastSeen, b.lastSeen),
+    photo:b.photo || a.photo, fp:b.fp || a.fp, likes:{ ...(a.likes || {}), ...(b.likes || {}) }, neutered:b.neutered ?? a.neutered, aliases:[...(b.aliases || []), a.id, ...(a.aliases || [])], verified:true });
+  for (const r of S.reports.filter(r => r.catId === a.id)) await put("reports", { ...r, catId:b.id });
+  await del("cats", a.id);
+}
+function exportCsv(kind){
+  const cell = v => { const t = v == null ? "" : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const d = t => t ? new Date(t).toLocaleString("he-IL") : "";
+  const rows = kind === "cats"
+    ? [["ת.ז", "שם", "אזור", "צבע", "דוגמה", "סימנים", "מין", "גיל", "מעוקר", "בריאות", "לאימוץ", "תצפיות", "נראה לראשונה", "נראה לאחרונה", "קו רוחב", "קו אורך", "מאומת"],
+       ...S.cats.map(c => [c.id, c.name, DIST[c.district]?.name, c.color, c.pattern, c.marks, c.sex, c.age, c.neutered == null ? "?" : c.neutered ? "כן" : "לא", c.health, isAdoptable(c) ? "כן" : "", c.sightings, d(c.firstSeen), d(c.lastSeen), c.lat?.toFixed(5), c.lng?.toFixed(5), c.verified === false ? "לא" : "כן"])]
+    : [["מזהה", "סוג", "סטטוס", "דחיפות", "אזור", "תיאור", "חתול", "נוצר", "קו רוחב", "קו אורך"],
+       ...S.reports.map(r => [r.id, REP_LABEL[r.type], r.status, r.urgency || "", DIST[r.district]?.name, r.desc, r.catId || "", d(r.created), r.lat?.toFixed(5), r.lng?.toFixed(5)])];
+  const blob = new Blob(["﻿" + rows.map(r => r.map(cell).join(",")).join("\r\n")], { type:"text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `citycat-${kind}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 async function loadAdopt(){
   let list = [];
@@ -1618,7 +1755,7 @@ async function startProd(){
   showAuth();
   const go = $("#auGo"); if (go) go.disabled = true;
   try {
-    if (!window.supabase) await new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = SB_JS; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); });
+    if (!window.supabase) await loadScript(SB_JS);
   } catch { $("#auErr").textContent = "אין חיבור לשרת. בדוק את האינטרנט ונסה לרענן."; return; }
   S.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
   S.sb.auth.onAuthStateChange((ev, session) => {
@@ -1632,7 +1769,9 @@ async function startProd(){
 /* ---------- boot ---------- */
 function bootDemo(){
   S.demo = true; $("#demoFlag").hidden = false;
-  const saved = store.get("demo", null), d = saved || demoData();
+  // Versions before the clean release kept sample data under these keys.
+  if (!store.get("clean3", false)){ ["demo", "me", "adopt", "vols"].forEach(k => { try { localStorage.removeItem("catstlv:" + k); } catch {} }); store.set("clean3", true); }
+  const d = store.get("local", null) || { cats:[], reports:[], stations:[] };
   S.cats = d.cats; S.reports = d.reports; S.stations = d.stations;
   S.me = { ...S.me, ...store.get("me", {}) };
   S.uid = store.get("uid", null) || (() => { const u = "guest-" + uidShort(); store.set("uid", u); return u; })();
